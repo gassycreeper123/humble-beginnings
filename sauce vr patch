@@ -1,0 +1,320 @@
+local path ="rostruct/cache/releases/saucekid-saucevr-LATEST-ZIPBALL/src/Util/FixChatted.lua"
+local yourstupidgaypatch = [[
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+local LocalPlayer = Players.LocalPlayer
+TextChatService.MessageReceived:Connect(function(message)
+    local textSource = message.TextSource
+    if not textSource then
+        return
+    end
+    local player = Players:GetPlayerByUserId(textSource.UserId)
+    if not player or player == LocalPlayer then
+        return
+    end
+    firesignal(player.Chatted, message.Text)
+    firesignal(Players.PlayerChatted, nil, player, message.Text, nil)
+end)
+return true
+]]
+local thirdpath = "rostruct/cache/releases/saucekid-saucevr-LATEST-ZIPBALL/src/Comeponets/Keyboard.lua "
+local keyboardfix = [[
+local sauceVR = script:FindFirstAncestor("sauceVR")
+
+local Utils = require(sauceVR.Util.Utils)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local SoundService = game:GetService("SoundService")
+local HapticService = game:GetService("HapticService")
+
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local Keyboard = {}
+Keyboard.SelectedKey = nil
+Keyboard.Active = false
+Keyboard.Caps = false
+
+
+local function playSound(id)
+	local sound = Instance.new("Sound")
+	sound.SoundId = id
+	SoundService:PlayLocalSound(sound)
+end
+
+local function bump()
+    HapticService:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.RightHand, 0.4)
+    task.wait()
+    HapticService:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.RightHand, 0)
+end
+
+
+function Keyboard:Init()
+    self.Model = sauceVR.Assets.Keyboard:Clone()
+    self.Model.Parent = ReplicatedStorage
+
+    local SelectionBox = Instance.new("Highlight", workspace.Terrain)
+    SelectionBox.FillColor = Color3.fromRGB(182, 182, 182)
+    local Preview = self.Model.Preview.Display.Input
+
+    local function typeKey(key)
+        local display = key:FindFirstChild("Display");
+
+        if self.Active then
+            if key.Name:find("Key") then
+                if Caps then
+                    if display:FindFirstChild("Cap") then
+                        Preview.Text = Preview.Text.. display.Cap.Text
+                    else
+                        Preview.Text = Preview.Text.. display.Key.Text:upper()
+                    end
+                else
+                    Preview.Text = Preview.Text.. display.Key.Text:lower()
+                end
+            elseif key.Name == "Space" then
+                Preview.Text = Preview.Text.. " "
+            elseif key.Name == "Enter" then
+                if Preview.Text ~= "" then
+                    game.TextChatService.TextChannels.RBXGeneral:SendAsync(Preview.Text)
+                    --ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents"):WaitForChild("SayMessageRequest"):FireServer(Preview.Text,"All")
+                    Preview.Text = ""
+                end
+            elseif key.Name == "Backspace" then
+                Preview.Text = Preview.Text:sub(1, #Preview.Text-1)
+            elseif key.Name == "Clear" then
+                Preview.Text = ""
+            elseif key.Name == "Caps" then
+                Caps = not Caps
+                key.Material = Caps and "Neon" or "SmoothPlastic"
+                for i,v in pairs(self.Model:GetChildren()) do
+                    if v.Name:find("Key") then
+                        v.Display.Key.Text = Caps and v.Display.Key.Text:upper() or v.Display.Key.Text:lower()
+                    end
+                end
+            elseif key.Name == "Exit" then
+                self.Active = false
+            end
+        end
+    end
+
+    for _,key in pairs(self.Model:GetChildren()) do
+        if key.Name == "Board" then continue end
+        local display = key:FindFirstChild("Display");
+        if display and display:FindFirstChild("Key") then
+            display.Key.TextScaled = true
+        end
+        key.Touched:Connect(function(part)
+            if part:IsDescendantOf(LocalPlayer.Character) and part.Name:find("Fake") then
+                typeKey(key)
+            end
+        end)
+    end
+
+    function handleKeyboard()
+        local VRInputs =  VRInputService:GetVRInputs()
+        local CameraCenterCFrame = Camera:GetRenderCFrame() * VRInputs[Enum.UserCFrame.Head]:Inverse()
+
+        if (CameraCenterCFrame.Position - self.Model.PrimaryPart.Position).Magnitude > 20 then
+            self.Active = false
+        end
+
+        if self.Active then
+            self.Model.Parent = Camera
+            self.Model:SetPrimaryPartCFrame(self.Model.PrimaryPart.CFrame:lerp(CFrame.lookAt(self.Model.PrimaryPart.Position, CameraCenterCFrame.Position + Vector3.new(0,2,0)) * CFrame.Angles(0,math.rad(180),0), .01))
+        else
+            self.Model.Parent = ReplicatedStorage
+        end
+
+        local Key = Utils:getPointPart(CameraCenterCFrame * VRInputs[Enum.UserCFrame.RightHand], 100, "lookVector", {LocalPlayer.Character, CurrentCamera, workspace.Terrain:FindFirstChild("VRCharacter")})
+        if Key and Key:IsDescendantOf(self.Model) and Key.Name ~= "Board" and Key.Name ~= "Preview" then
+            if Key ~= self.SelectedKey then
+                SelectionBox.Adornee = Key
+                self.SelectedKey = Key
+                playSound("rbxassetid://10066936758")
+                bump()
+            end
+        else
+            SelectionBox.Adornee = nil
+            self.SelectedKey = nil
+        end
+    end
+    self.Connection = RunService.RenderStepped:Connect(handleKeyboard)
+
+    local cooldown = false
+    UserInputService.InputBegan:connect(function(key)
+        if key.KeyCode == Enum.KeyCode.ButtonR2 or key.UserInputType == Enum.UserInputType.MouseButton1 then
+            if self.SelectedKey and not cooldown then
+                cooldown = true
+                typeKey(self.SelectedKey)
+                task.delay(.1, function() 
+                    cooldown  = false
+                end)
+            end
+        end
+    end)
+end
+
+return Keyboard
+]]
+local secondpath = "rostruct/cache/releases/saucekid-saucevr-LATEST-ZIPBALL/src/Util/Netless.lua"
+local anotherstupidgaypatch = [[
+--    Netless bypass 
+--    edited from MW Reanimate
+
+local sauceVR = script:FindFirstAncestor("sauceVR")
+local Utils = require(sauceVR.Util.Utils)
+
+local lp = game:GetService("Players").LocalPlayer
+local rs, ws, sg = game:GetService("RunService"), game:GetService("Workspace"), game:GetService("StarterGui")
+local stepped, heartbeat, renderstepped = rs.Stepped, rs.Heartbeat, rs.RenderStepped
+local twait, tdelay, rad, inf, abs, mclamp = task.wait, task.delay, math.rad, math.huge, math.abs, math.clamp
+local cf, v3, angles = CFrame.new, Vector3.new, CFrame.Angles
+local v3_0, cf_0 = v3(0, 0, 0), cf(0, 0, 0)
+
+local c = lp.Character
+
+if not (c and c.Parent) then
+    return
+end
+
+c:GetPropertyChangedSignal("Parent"):Connect(function()
+    if not (c and c.Parent) then
+        c = nil
+    end
+end)
+
+local destroy = c.Destroy
+
+local v3_xz, v3_net = v3(1, 0, 1), v3(0.1, 5.1, 0.1)
+local function getNetlessVelocity(realPartVelocity) --edit this if you have a better netless method
+    if realPartVelocity.Magnitude < 0.1 then return v3_net end
+    return realPartVelocity * v3_xz + v3_net
+end
+
+local shp = getfenv().sethiddenproperty
+if shp then
+    local con = nil
+    con = heartbeat:Connect(function()
+        if not c then return con:Disconnect() end
+        shp(lp, "SimulationRadius", 1000)
+    end)
+end
+
+
+local fenv = getfenv()
+
+local shp = fenv.sethiddenproperty or fenv.set_hidden_property or fenv.set_hidden_prop or fenv.sethiddenprop
+local ssr = fenv.setsimulationradius or fenv.set_simulation_radius or fenv.set_sim_radius or fenv.setsimradius or fenv.setsimrad or fenv.set_sim_rad
+
+local reclaim, lostpart = c.PrimaryPart, nil
+
+local v3_hide = v3(0, 400, 0)
+
+pcall(function()
+    settings().Physics.AllowSleep = false
+    settings().Physics.PhysicsEnvironmentalThrottle = Enum.EnviromentalPhysicsThrottle.Disabled
+end)
+
+
+local netless = {}
+
+function netless:align(Part0, Part1, offset, nameHide)
+    local align = {
+        nameHide = nameHide,
+        offset = offset or v3_0,
+        Part0 = Part0,
+        Part1 = Part1,
+    }
+
+    --Create offset attachment
+    local att1 = Instance.new("Attachment")
+    att1.Name  = "att1_" .. Part1.Name
+    att1[typeof(offset) == "CFrame" and "CFrame" or "Position"] = offset or v3_0
+    align.att1 = att1
+
+    --Remove any welds/motors connected to part.
+    local Motor = Utils:GetMotorForLimb(Part0); if Motor then Motor:Destroy() end
+
+    local accessoryWeld = Part0:FindFirstChild("AccessoryWeld")
+    if accessoryWeld then
+        accessoryWeld:Destroy()
+    end
+
+    --Hide health by moving head away for a moment (PATCHED)
+    --[=[
+    local hide = false
+    if Part0.Name == "Head" and align.nameHide then
+        tdelay(0, function()
+            while twait(6) and Part0 and c do
+                hide = true
+                twait(0.015)
+                hide = false
+            end
+        end)
+    end
+    ]=]
+
+    --Align Part0 to Part1
+    local rot = rad(0.01)
+    local con0, con1 = nil, nil
+    con0 = stepped:Connect(function()
+        if not (align.Part0 and align.Part1) then return con0:Disconnect() and con1:Disconnect() end
+        align.Part0.RotVelocity = align.Part1.RotVelocity
+    end)
+
+    local lastpos, vel = align.Part0.Position, align.Part1.Velocity
+    con1 = heartbeat:Connect(function(delta)
+        if not (align.Part0 and align.Part1 and att1) then return con0:Disconnect() and con1:Disconnect() end
+        if (not align.Part0.Anchored) then
+            if lostpart == align.Part0 then
+                lostpart = nil
+            end
+            att1[typeof(align.offset) == "CFrame" and "CFrame" or "Position"] = align.offset or v3_0
+            local newcf = align.Part1.CFrame * att1.CFrame
+            local vel = (newcf.Position - lastpos) / delta
+            align.Part0.Velocity = getNetlessVelocity(vel)
+            if vel.Magnitude < 1 then
+                rot = -rot
+                newcf *= angles(0, 0, rot)
+            end
+            lastpos = newcf.Position
+            if lostpart and (align.Part0 == reclaim) then
+                newcf = lostpart.CFrame
+            elseif hide then
+                newcf += v3_hide
+            end
+            align.Part0.CFrame = newcf
+        elseif (not align.Part0.Anchored) and (abs(align.Part0.Velocity.X) < 45) and (abs(align.Part0.Velocity.Y) < 25) and (abs(align.Part0.Velocity.Z) < 45) then
+            lostpart = align.Part0
+        end
+    end)
+
+    att1:GetPropertyChangedSignal("Parent"):Connect(function()
+        Part1 = att1.Parent
+        if Part1 and not Part1:IsA("BasePart") then
+            att1 = nil
+            Part1 = nil
+        end
+    end)
+    att1.Parent = align.Part1
+
+    return align
+end
+
+return netless
+]]
+if getgenv().fixmyjiggleyoufatbitch then
+    writefile(secondpath,anotherstupidgaypatch)
+end
+writefile(thirdpath,keyboardfix)
+writefile(path, yourstupidgaypatch)
+if getgenv().debugfornerds then
+    print(readfile(path))
+    print(readfile(secondpath))
+    print(readfile(thirdpath))
+    warn("if it didnt print the code it didnt work")
+    print("also you're a fucking loser for toggling debugfornerds you actual dork. you'll NEVER amount to ANYTHING")
+end
